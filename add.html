@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <title>sqlite数据库测试</title>
+    <script src="js/axios.min.js"></script>
+    <script src="js/vue.min.js"></script>
+    <script src="js/quill.js"></script>
+    <script src="js/element-ui.js"></script>
+    <link rel="stylesheet" href="css/quill.snow.css?v={:time()}">
+    <link rel="stylesheet" href="css/quiil.css?v={:time()}">
+    <link rel="stylesheet" href="css/element-ui.css">
+    <style>
+        .vertical-menu {
+            height: 800px;
+            overflow: auto;
+            position: sticky;
+            top: 50px;
+            padding-left: 200px;
+        }
+        .vertical-form {
+            height: 850px;
+            overflow: auto;
+            position: sticky;
+            top: 80px;
+            width: 500px;
+        }
+        .htmledit_views{
+            overflow: auto;
+            height: 920px;
+        }
+        .vertical-form .el-switch{
+            padding-left: 80px;
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+<div style="display: flex" id="app">
+    <div style="flex: 2;">
+        <el-row class="tac vertical-menu">
+            <el-col>
+                <h5>菜单</h5>
+                <el-menu @open="handleOpen" @close="handleClose">
+                    <el-menu-item v-for="(item,key) in title_data" :index="key" @click="scrollIntoView(key,item)">
+                        <span slot="title">{{key+1}}、{{item.name}}</span>
+                    </el-menu-item>
+                </el-menu>
+            </el-col>
+        </el-row>
+    </div>
+    <div style="flex: 5">
+        <div id="content_views" class="htmledit_views">
+            <div v-for="(item,key) in title_data" :index="key">
+                <h5 :ref="'text'+key"><strong>{{key+1}}、{{item.name}}</strong></h5>
+                <div v-html="item.text"></div>
+            </div>
+        </div>
+    </div>
+    <div style="flex: 5;">
+        <div class="tac vertical-form">
+            <el-button @click="updateGit">update</el-button>
+            <el-switch v-model="knowledgeShow"  class="el-switch"></el-switch>
+            <el-form v-show="knowledgeShow" ref="knowledge" :model="knowledge" label-width="80px" >
+                <el-form-item label="id">
+                    <el-input v-model.number="knowledge.id" autocomplete="off"></el-input>
+                </el-form-item>
+                <el-form-item label="名称" prop="name" :rules="[{ required: true, message: '名称不能为空'}]">
+                    <el-input v-model="knowledge.name"></el-input>
+                </el-form-item>
+                <el-form-item label="代码"  prop="text":rules="[{ required: true, message: '代码不能为空'}]">
+                    <div id="editor" class="ql-editor"></div>
+                </el-form-item>
+                <el-form-item label="排序"  prop="sort" :rules="[ { required: true, message: '排序不能为空'},{ type: 'number', message: '排序不能为空'}]">
+                    <el-input v-model.number="knowledge.sort" autocomplete="off"></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" @click="onSubmit()">{{knowledge.id===0?"立即创建":"修改数据"}}</el-button>
+                </el-form-item>
+            </el-form>
+        </div>
+    </div>
+</div>
+
+<script>
+    new Vue({
+        el: '#app',
+        data: {
+            myQuill: {},
+            count: 0,
+            title_data: [],
+            knowledgeShow:false,
+            knowledge: {
+                id:0,
+                name: '',
+                text: '',
+                sort:0,
+
+            }
+        },
+        mounted:function () {
+            this.myQuill = new Quill('#editor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        [{ 'color': [] }], // 添加颜色选择器
+                    ]
+                }
+            });
+        },
+        created: function () {
+
+            this.getAllData()
+        },
+        methods: {
+            getAllData(){
+                var _that =this;
+                axios.get("./json/fzj_knowledge.json").then(function (res) {
+                    _that.title_data = res.data;
+                });
+            },
+            handleOpen(key, keyPath) {
+
+            },
+            handleClose(key, keyPath) {
+
+            },
+            scrollIntoView(key,value) {
+                this.$refs['text' + key][0].scrollIntoView({behavior: 'smooth'})
+                this.knowledge.sort=value.sort
+                this.knowledge.id=value.id
+                this.myQuill.root.innerHTML=value.text;
+                this.knowledge.name=value.name
+            },
+//总体规划和开发合同用于与系统分析人员在系统规划和系统分析的段的问通，双法计划(用于系统则法人员与系统开发人之间的沟通。
+            onSubmit() {
+                if (this.myQuill.getContents().ops.length === 0){
+                    this.$message.error('内容不能为空');
+                }
+                this.knowledge.text =this.myQuill.root.innerHTML;
+                this.knowledge.sort =   this.knowledge.sort+1;
+                var _that=this
+                this.$refs['knowledge'].validate((valid) => {
+                    if (valid) {
+                        post('/index/Knowledge/save',this.knowledge).then(function (res) {
+                            if (res.data.code === 10) {
+                                if (!_that.knowledge.id){
+                                    let index = _that.title_data.findIndex(function (v) {
+                                        return v.sort>_that.knowledge.sort
+                                    })
+                                    const data ={};
+                                    data.id=res.data.data.id
+                                    data.name=_that.knowledge.name;
+                                    data.sort=_that.knowledge.sort;
+                                    data.text=_that.knowledge.text;
+                                    _that.title_data.splice(index, 0, data);
+                                }else{
+                                    let index = _that.title_data.findIndex(function (v) {
+                                        return v.id===_that.knowledge.id
+                                    })
+                                    const data ={};
+                                    data.id=_that.knowledge.id;
+                                    data.name=_that.knowledge.name;
+                                    data.sort=_that.knowledge.sort;
+                                    data.text=_that.knowledge.text;
+                                    _that.title_data[index]=data;
+                                }
+
+                                _that.$refs['knowledge'].resetFields();
+                            }
+                        });
+                    }
+                });
+            },
+            updateGit(){
+                post('/index/Knowledge/makeKnowledge').then(function (res) {
+                    this.$message.success('更新成功');
+                });
+            }
+        }
+    })
+</script>
+
+<script>
+    axios.get("./fzj_knowledge.json")
+        .then(function (response) {
+            console.info(response.data);
+        })
+        .catch(function (error) {
+            console.info(error);
+        });
+</script>
+</body>
+</html>
